@@ -1,0 +1,5 @@
+# BreachHound known-bad IP indicators (one per line).
+# Placeholder seed list — replace/extend with a real threat-intel feed.
+# These RFC 5737 documentation ranges are safe sample values.
+198.51.100.13
+203.0.113.66

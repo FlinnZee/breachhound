@@ -1,0 +1,4 @@
+# BreachHound known-bad domain indicators (one per line).
+# Placeholder seed list — replace/extend with a real threat-intel feed.
+malware-c2.example
+evil-update.example

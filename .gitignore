@@ -1,0 +1,6 @@
+/breachhound
+/breachhound.exe
+*.exe
+report.json
+report.html
+/dist/
