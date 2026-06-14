@@ -10,8 +10,8 @@ import (
 
 func init() { core.RegisterCollector(&processes{}) }
 
-// processes gathers the running process tree with command lines and (best
-// effort) Authenticode signature status.
+// processes gathers the running process tree with command lines and
+// Authenticode signature status.
 type processes struct{}
 
 func (processes) Name() string { return "processes" }
@@ -31,36 +31,79 @@ func (p processes) Collect(ctx *core.Context) error {
 	if err := psJSON(script, &raw); err != nil {
 		return err
 	}
+
+	// Collect the unique executable paths and resolve all signatures in a
+	// single PowerShell call rather than spawning one process per binary.
+	paths := make([]string, 0, len(raw))
+	seen := map[string]bool{}
 	for _, r := range raw {
-		signed, signer := authenticode(r.ExecutablePath)
+		path := strings.TrimSpace(r.ExecutablePath)
+		if path == "" || seen[strings.ToLower(path)] {
+			continue
+		}
+		seen[strings.ToLower(path)] = true
+		paths = append(paths, path)
+	}
+	sigs := authenticodeBatch(paths)
+
+	for _, r := range raw {
+		key := strings.ToLower(strings.TrimSpace(r.ExecutablePath))
+		sig := sigs[key]
 		ctx.Host.Processes = append(ctx.Host.Processes, core.Process{
 			PID:       r.ProcessId,
 			PPID:      r.ParentProcessId,
 			Name:      r.Name,
 			Path:      r.ExecutablePath,
 			CmdLine:   r.CommandLine,
-			Signed:    signed,
-			Signature: signer,
+			Signed:    sig.valid,
+			Signature: sig.signer,
 		})
 	}
 	return nil
 }
 
-// authenticode checks a file's signature status. Errors degrade to unsigned.
-func authenticode(path string) (bool, string) {
-	if strings.TrimSpace(path) == "" {
-		return false, ""
+type sigResult struct {
+	valid  bool
+	signer string
+}
+
+// authenticodeBatch resolves Authenticode status for many files in one
+// PowerShell call. Unknown/unresolvable paths are treated as unsigned.
+func authenticodeBatch(paths []string) map[string]sigResult {
+	out := map[string]sigResult{}
+	if len(paths) == 0 {
+		return out
 	}
-	var res struct {
+
+	// Build a PowerShell array literal of the paths.
+	quoted := make([]string, 0, len(paths))
+	for _, p := range paths {
+		quoted = append(quoted, psQuote(p))
+	}
+	script := `@(` + strings.Join(quoted, ",") + `) | ForEach-Object {
+  $s = Get-AuthenticodeSignature -LiteralPath $_ -ErrorAction SilentlyContinue
+  [pscustomobject]@{
+    Path = $_
+    Status = if ($s) { $s.Status.ToString() } else { 'Unknown' }
+    Signer = if ($s -and $s.SignerCertificate) { $s.SignerCertificate.Subject } else { '' }
+  }
+} | ConvertTo-Json -Compress -Depth 3`
+
+	var rows []struct {
+		Path   string `json:"Path"`
 		Status string `json:"Status"`
-		Signer string `json:"SignerCertificate"`
+		Signer string `json:"Signer"`
 	}
-	script := `$s = Get-AuthenticodeSignature -LiteralPath ` + psQuote(path) +
-		`; [pscustomobject]@{Status=$s.Status.ToString();SignerCertificate=$s.SignerCertificate.Subject} | ConvertTo-Json -Compress`
-	if err := psJSON(script, &res); err != nil {
-		return false, ""
+	if err := psJSON(script, &rows); err != nil {
+		return out
 	}
-	return res.Status == "Valid", res.Signer
+	for _, r := range rows {
+		out[strings.ToLower(strings.TrimSpace(r.Path))] = sigResult{
+			valid:  r.Status == "Valid",
+			signer: r.Signer,
+		}
+	}
+	return out
 }
 
 // psQuote wraps a string as a single-quoted PowerShell literal.

@@ -35,6 +35,17 @@ type PersistenceItem struct {
 	User     string `json:"user,omitempty"`
 }
 
+// LocalUser is a local account and the attributes detectors care about.
+type LocalUser struct {
+	Name      string   `json:"name"`
+	SID       string   `json:"sid,omitempty"`
+	Enabled   bool     `json:"enabled"`
+	LastLogon string   `json:"last_logon,omitempty"`
+	Created   string   `json:"created,omitempty"`
+	Groups    []string `json:"groups,omitempty"` // local groups the user belongs to
+	Admin     bool     `json:"admin"`            // member of Administrators
+}
+
 // HostModel is the shared in-memory snapshot that collectors fill and
 // detectors consume. One scan produces exactly one HostModel.
 type HostModel struct {
@@ -45,4 +56,5 @@ type HostModel struct {
 	Processes   []Process         `json:"processes,omitempty"`
 	Connections []Connection      `json:"connections,omitempty"`
 	Persistence []PersistenceItem `json:"persistence,omitempty"`
+	Users       []LocalUser       `json:"users,omitempty"`
 }
