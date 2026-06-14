@@ -22,6 +22,12 @@ type Context struct {
 	Host   *HostModel
 	Logger *log.Logger
 
+	// OnStage, if set, is invoked as each pipeline stage runs (phase is
+	// "collect" or "detect", name is the collector/detector name). It lets a
+	// front-end such as the GUI report live progress. It may be called from
+	// the pipeline goroutine, so implementations must be safe to call there.
+	OnStage func(phase, name string)
+
 	mu       sync.Mutex
 	findings []Finding
 	skipped  []string
@@ -33,6 +39,13 @@ func NewContext(cfg Config) *Context {
 		Config: cfg,
 		Host:   &HostModel{},
 		Logger: log.New(os.Stderr, "", log.LstdFlags),
+	}
+}
+
+// stage reports pipeline progress to the OnStage hook if one is set.
+func (c *Context) stage(phase, name string) {
+	if c.OnStage != nil {
+		c.OnStage(phase, name)
 	}
 }
 

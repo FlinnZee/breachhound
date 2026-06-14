@@ -36,12 +36,14 @@ func Detectors() []Detector { return detectors }
 func (c *Context) Run() {
 	for _, col := range collectors {
 		c.Logger.Printf("collect: %s", col.Name())
+		c.stage("collect", col.Name())
 		if err := col.Collect(c); err != nil {
 			c.Logger.Printf("collector %s failed: %v", col.Name(), err)
 		}
 	}
 	for _, det := range detectors {
 		c.Logger.Printf("detect: %s", det.Name())
+		c.stage("detect", det.Name())
 		fs, err := det.Detect(c)
 		if err != nil {
 			c.Logger.Printf("detector %s failed: %v", det.Name(), err)
