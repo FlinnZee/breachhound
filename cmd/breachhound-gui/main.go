@@ -6,7 +6,6 @@ package main
 import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/container"
 
 	"github.com/FlinnZee/breachhound/internal/core"
 )
@@ -16,7 +15,7 @@ func main() {
 	a.Settings().SetTheme(newBreachTheme())
 
 	w := a.NewWindow(core.Name + " — Compromise Assessment")
-	w.Resize(fyne.NewSize(1040, 720))
+	w.Resize(fyne.NewSize(1180, 760))
 
 	name, osName, elevated := quickHostInfo()
 	u := &ui{
@@ -25,9 +24,8 @@ func main() {
 		hostName: name,
 		osName:   osName,
 		elevated: elevated,
-		center:   container.NewStack(),
 	}
 	w.SetContent(u.build())
-	u.showIdle()
+	u.selectView("dashboard")
 	w.ShowAndRun()
 }

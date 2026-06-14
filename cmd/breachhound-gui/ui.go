@@ -2,9 +2,6 @@ package main
 
 import (
 	"fmt"
-	"image/color"
-	"sort"
-	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -17,6 +14,18 @@ import (
 	"github.com/FlinnZee/breachhound/internal/report"
 )
 
+// navOrder defines the sidebar sections, in order.
+var navOrder = []struct {
+	id, label string
+	icon      fyne.Resource
+}{
+	{"dashboard", "Dashboard", theme.HomeIcon()},
+	{"findings", "Findings", theme.WarningIcon()},
+	{"processes", "Processes", theme.ComputerIcon()},
+	{"network", "Network", theme.MailSendIcon()},
+	{"persistence", "Persistence", theme.StorageIcon()},
+}
+
 // ui owns the window and the mutable widgets the scan flow updates.
 type ui struct {
 	app fyne.App
@@ -26,9 +35,12 @@ type ui struct {
 	osName   string
 	elevated bool
 
-	center *fyne.Container // swappable main content area
-	quick  bool
-	last   *scanResult
+	quick bool
+	last  *scanResult
+
+	content    *fyne.Container // swappable main content area
+	active     string
+	navButtons map[string]*widget.Button
 
 	runBtn    *widget.Button
 	exportBtn *widget.Button
@@ -36,96 +48,100 @@ type ui struct {
 	stageLbl  *widget.Label
 }
 
-// build assembles the persistent window chrome around the swappable center.
+// build assembles the sidebar + main content shell.
 func (u *ui) build() fyne.CanvasObject {
-	return container.NewBorder(u.header(), u.actions(), nil, nil, u.center)
+	u.content = container.NewStack()
+	sidebar := u.buildSidebar()
+	return container.NewBorder(nil, nil, container.NewHBox(sidebar, widget.NewSeparator()), nil, u.content)
 }
 
-func (u *ui) header() fyne.CanvasObject {
-	dot := canvas.NewRectangle(hex(0x2dd4bf))
-	dot.CornerRadius = 4
-	brand := canvas.NewText(core.Name, hex(0xe6edf3))
-	brand.TextSize = 22
-	brand.TextStyle.Bold = true
-	tagline := canvas.NewText("Compromise Assessment", hex(0x8b949e))
-	tagline.TextSize = 12
-	left := container.NewHBox(
-		container.NewGridWrap(fyne.NewSize(10, 28), container.NewCenter(container.NewGridWrap(fyne.NewSize(6, 22), dot))),
-		container.NewVBox(brand, tagline),
-	)
+func (u *ui) buildSidebar() fyne.CanvasObject {
+	accent := canvas.NewRectangle(hex(0x2dd4bf))
+	accent.CornerRadius = 2
+	brandText := canvas.NewText(core.Name, hex(0xe6edf3))
+	brandText.TextSize = 20
+	brandText.TextStyle.Bold = true
+	brand := container.NewHBox(container.NewGridWrap(fyne.NewSize(4, 22), accent), brandText)
+	top := container.NewVBox(container.NewPadded(brand), widget.NewSeparator())
+
+	u.navButtons = map[string]*widget.Button{}
+	navBox := container.NewVBox()
+	for _, it := range navOrder {
+		id := it.id
+		b := widget.NewButtonWithIcon(it.label, it.icon, func() { u.selectView(id) })
+		b.Alignment = widget.ButtonAlignLeading
+		b.Importance = widget.LowImportance
+		u.navButtons[id] = b
+		navBox.Add(b)
+	}
 
 	host := canvas.NewText(u.hostName, hex(0xe6edf3))
-	host.TextSize = 14
+	host.TextSize = 13
 	host.TextStyle.Bold = true
-	host.Alignment = fyne.TextAlignTrailing
-	meta := canvas.NewText(fmt.Sprintf("%s  ·  %s", u.osName, elevationText(u.elevated)), elevationColor(u.elevated))
-	meta.TextSize = 12
-	meta.Alignment = fyne.TextAlignTrailing
-	right := container.NewVBox(host, meta)
-
-	bar := container.NewBorder(nil, nil, left, right)
-	return container.NewVBox(container.NewPadded(bar), widget.NewSeparator())
-}
-
-func (u *ui) actions() fyne.CanvasObject {
-	quick := widget.NewCheck("Quick scan", func(b bool) { u.quick = b })
-
-	u.exportBtn = widget.NewButtonWithIcon("Export report…", theme.DocumentSaveIcon(), u.exportReport)
-	u.exportBtn.Disable()
+	meta := canvas.NewText(fmt.Sprintf("%s · %s", u.osName, elevationText(u.elevated)), elevationColor(u.elevated))
+	meta.TextSize = 11
 
 	u.runBtn = widget.NewButtonWithIcon("Run Scan", theme.MediaPlayIcon(), u.startScan)
 	u.runBtn.Importance = widget.HighImportance
+	u.exportBtn = widget.NewButtonWithIcon("Export report…", theme.DocumentSaveIcon(), u.exportReport)
+	u.exportBtn.Disable()
+	quick := widget.NewCheck("Quick scan", func(b bool) { u.quick = b })
 
-	bar := container.NewBorder(nil, nil, quick, container.NewHBox(u.exportBtn, u.runBtn))
-	return container.NewVBox(widget.NewSeparator(), container.NewPadded(bar))
+	credit := canvas.NewText(fmt.Sprintf("v%s  ·  by %s", core.Version, core.Author), hex(0x6e7681))
+	credit.TextSize = 10
+
+	bottom := container.NewVBox(
+		widget.NewSeparator(),
+		container.NewPadded(container.NewVBox(host, meta, widget.NewLabel(""), u.runBtn, u.exportBtn, quick)),
+		widget.NewSeparator(),
+		container.NewPadded(credit),
+	)
+
+	return container.NewBorder(top, bottom, nil, nil, container.NewVScroll(navBox))
 }
 
-// swap replaces the center content.
-func (u *ui) swap(o fyne.CanvasObject) {
-	u.center.Objects = []fyne.CanvasObject{o}
-	u.center.Refresh()
-}
-
-func (u *ui) showIdle() {
-	subtitle := widget.NewLabelWithStyle(
-		"Read-only check of persistence, processes, and network — then a\nplain-English verdict mapped to MITRE ATT&CK.",
-		fyne.TextAlignCenter, fyne.TextStyle{})
-
-	run := widget.NewButtonWithIcon("Run Scan", theme.MediaPlayIcon(), u.startScan)
-	run.Importance = widget.HighImportance
-
-	u.swap(container.NewCenter(container.NewVBox(
-		centeredText("Is this PC compromised?", 26, true, 0xe6edf3),
-		subtitle,
-		widget.NewLabel(""),
-		container.NewCenter(run),
-	)))
-}
-
-func (u *ui) showScanning() {
-	u.progress = widget.NewProgressBar()
-	u.stageLbl = widget.NewLabelWithStyle("Starting…", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
-	u.swap(container.NewCenter(container.NewVBox(
-		centeredText("Scanning…", 20, true, 0xe6edf3),
-		widget.NewLabel(""),
-		container.NewGridWrap(fyne.NewSize(440, 16), u.progress),
-		u.stageLbl,
-	)))
-}
-
-func (u *ui) setProgress(frac float64, stage string) {
-	if u.progress != nil {
-		u.progress.SetValue(frac)
+func (u *ui) selectView(id string) {
+	u.active = id
+	for nid, b := range u.navButtons {
+		if nid == id {
+			b.Importance = widget.HighImportance
+		} else {
+			b.Importance = widget.LowImportance
+		}
+		b.Refresh()
 	}
-	if u.stageLbl != nil {
-		u.stageLbl.SetText(stage)
+	u.content.Objects = []fyne.CanvasObject{u.viewContent(id)}
+	u.content.Refresh()
+}
+
+func (u *ui) viewContent(id string) fyne.CanvasObject {
+	switch id {
+	case "findings":
+		return u.findingsView()
+	case "processes":
+		return u.processesView()
+	case "network":
+		return u.networkView()
+	case "persistence":
+		return u.persistenceView()
+	default:
+		return u.dashboardView()
 	}
 }
 
 func (u *ui) startScan() {
 	u.runBtn.Disable()
 	u.exportBtn.Disable()
-	u.showScanning()
+
+	u.progress = widget.NewProgressBar()
+	u.stageLbl = widget.NewLabelWithStyle("Starting…", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
+	u.content.Objects = []fyne.CanvasObject{container.NewCenter(container.NewVBox(
+		centeredText("Scanning…", 20, true, 0xe6edf3),
+		widget.NewLabel(""),
+		container.NewGridWrap(fyne.NewSize(440, 16), u.progress),
+		u.stageLbl,
+	))}
+	u.content.Refresh()
 
 	total := stageCount()
 	if total == 0 {
@@ -142,24 +158,18 @@ func (u *ui) startScan() {
 			u.last = &res
 			u.runBtn.Enable()
 			u.exportBtn.Enable()
-			u.showResults(res)
+			u.selectView("dashboard")
 		})
 	}()
 }
 
-func (u *ui) showResults(res scanResult) {
-	top := container.NewVBox(verdictBanner(res.Result), summaryLine(res.Result))
-	if note := skippedNote(res.Result); note != nil {
-		top.Add(note)
+func (u *ui) setProgress(frac float64, stage string) {
+	if u.progress != nil {
+		u.progress.SetValue(frac)
 	}
-
-	var body fyne.CanvasObject
-	if len(res.Result.Findings) == 0 {
-		body = container.NewCenter(centeredText("No findings recorded.", 14, false, 0x8b949e))
-	} else {
-		body = findingsSplit(res.Result)
+	if u.stageLbl != nil {
+		u.stageLbl.SetText(stage)
 	}
-	u.swap(container.NewBorder(top, nil, nil, nil, container.NewPadded(body)))
 }
 
 func (u *ui) exportReport() {
@@ -182,147 +192,17 @@ func (u *ui) exportReport() {
 			dialog.ShowError(fmt.Errorf("could not write report to %s", path), u.win)
 			return
 		}
-		dialog.ShowInformation("Report saved", strings.Join(wrote, "\n"), u.win)
+		dialog.ShowInformation("Report saved", join(wrote), u.win)
 	}, u.win)
 }
 
-// --- view builders ---
-
-func verdictBanner(r core.Result) fyne.CanvasObject {
-	bg := canvas.NewRectangle(verdictColor(r.Verdict))
-	bg.CornerRadius = 12
-
-	v := canvas.NewText(string(r.Verdict), color.White)
-	v.TextSize = 28
-	v.TextStyle.Bold = true
-	score := canvas.NewText(fmt.Sprintf("Risk score   %d / 100", r.RiskScore), color.White)
-	score.TextSize = 14
-
-	inner := container.NewPadded(container.NewPadded(container.NewVBox(v, score)))
-	return container.NewPadded(container.NewStack(bg, inner))
-}
-
-func summaryLine(r core.Result) fyne.CanvasObject {
-	lbl := widget.NewLabel(verdictBlurb(r.Verdict))
-	lbl.Wrapping = fyne.TextWrapWord
-	return container.NewPadded(lbl)
-}
-
-func skippedNote(r core.Result) fyne.CanvasObject {
-	if len(r.Skipped) == 0 {
-		return nil
-	}
-	txt := fmt.Sprintf("Note: %d check(s) were skipped (often needs Administrator).", len(r.Skipped))
-	return container.NewPadded(widget.NewLabelWithStyle(txt, fyne.TextAlignLeading, fyne.TextStyle{Italic: true}))
-}
-
-func findingsSplit(r core.Result) fyne.CanvasObject {
-	detail := widget.NewRichTextFromMarkdown(
-		"### Select a finding\n\nPick an item on the left to see its evidence and ATT&CK mapping.")
-	detail.Wrapping = fyne.TextWrapWord
-	show := func(f core.Finding) { detail.ParseMarkdown(findingMarkdown(f)) }
-
-	groups := report.GroupByTactic(r.Findings)
-	acc := widget.NewAccordion()
-	acc.MultiOpen = true
-	for _, t := range sortedKeys(groups) {
-		fs := groups[t]
-		rows := container.NewVBox()
-		for _, f := range fs {
-			rows.Add(findingRow(f, show))
+func join(s []string) string {
+	out := ""
+	for i, v := range s {
+		if i > 0 {
+			out += "\n"
 		}
-		item := widget.NewAccordionItem(fmt.Sprintf("%s  (%d)", t, len(fs)), rows)
-		item.Open = true
-		acc.Append(item)
+		out += v
 	}
-
-	split := container.NewHSplit(container.NewScroll(acc), container.NewScroll(detail))
-	split.Offset = 0.46
-	return split
-}
-
-func findingRow(f core.Finding, onTap func(core.Finding)) fyne.CanvasObject {
-	chip := canvas.NewRectangle(severityColor(f.Severity))
-	chip.CornerRadius = 3
-	chipBox := container.NewGridWrap(fyne.NewSize(12, 12), chip)
-
-	btn := widget.NewButton(f.Title, func() { onTap(f) })
-	btn.Alignment = widget.ButtonAlignLeading
-	btn.Importance = widget.LowImportance
-
-	return container.NewBorder(nil, nil, container.NewCenter(chipBox), nil, btn)
-}
-
-func findingMarkdown(f core.Finding) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## %s\n\n", f.Title)
-	fmt.Fprintf(&b, "**Severity:** %s  •  **Confidence:** %s\n\n", f.Severity, f.Confidence)
-	if f.Technique != "" || f.Tactic != "" {
-		fmt.Fprintf(&b, "**ATT&CK:** %s %s\n\n", f.Technique, f.Tactic)
-	}
-	if f.Description != "" {
-		fmt.Fprintf(&b, "%s\n\n", f.Description)
-	}
-	if len(f.Evidence) > 0 {
-		b.WriteString("**Evidence**\n\n")
-		for _, e := range f.Evidence {
-			fmt.Fprintf(&b, "- `%s`\n", e)
-		}
-	}
-	return b.String()
-}
-
-// --- small helpers ---
-
-func centeredText(s string, size float32, bold bool, rgb uint32) *canvas.Text {
-	t := canvas.NewText(s, hex(rgb))
-	t.TextSize = size
-	t.TextStyle.Bold = bold
-	t.Alignment = fyne.TextAlignCenter
-	return t
-}
-
-func sortedKeys(m map[string][]core.Finding) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
-func stageVerb(phase string) string {
-	switch phase {
-	case "collect":
-		return "Collecting"
-	case "detect":
-		return "Detecting"
-	default:
-		return phase
-	}
-}
-
-func elevationText(elevated bool) string {
-	if elevated {
-		return "Administrator"
-	}
-	return "Standard user — some checks skipped"
-}
-
-func elevationColor(elevated bool) color.Color {
-	if elevated {
-		return hex(0x5ee08a)
-	}
-	return hex(0xf2cc60)
-}
-
-func verdictBlurb(v core.Verdict) string {
-	switch v {
-	case core.VerdictCompromised:
-		return "We found strong indicators that this machine may be compromised. Treat it as suspect and investigate the findings below now."
-	case core.VerdictReview:
-		return "Some things look unusual and deserve a closer look by a person. They are not proof of a hack on their own."
-	default:
-		return "No strong signs of compromise were found in what we could examine. This is reassuring, but not a guarantee."
-	}
+	return out
 }
