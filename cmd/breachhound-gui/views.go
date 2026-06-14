@@ -172,6 +172,20 @@ func (u *ui) accountsView() fyne.CanvasObject {
 	))
 }
 
+func (u *ui) eventsView() fyne.CanvasObject {
+	if u.last == nil {
+		return u.emptyState("No scan yet", "Run a full scan to collect Windows event logs.", true)
+	}
+	if len(u.last.Host.Events) == 0 {
+		return container.NewCenter(centeredText("No events collected (the Security log needs Administrator).", 14, false, 0x8b949e))
+	}
+	return container.NewPadded(newDataTable(
+		[]string{"Time", "Channel", "ID", "Provider", "Message"},
+		[]float32{150, 230, 60, 220, 520},
+		eventRows(u.last.Host),
+	))
+}
+
 // --- shared finding/result builders ---
 
 func verdictBanner(r core.Result) fyne.CanvasObject {
@@ -308,4 +322,16 @@ func yesNo(b bool) string {
 		return "yes"
 	}
 	return "no"
+}
+
+func eventRows(h *core.HostModel) [][]string {
+	rows := make([][]string, 0, len(h.Events))
+	for _, e := range h.Events {
+		t := e.Time
+		if len(t) > 19 {
+			t = strings.Replace(t[:19], "T", " ", 1)
+		}
+		rows = append(rows, []string{t, e.Channel, strconv.Itoa(e.ID), e.Provider, e.Message})
+	}
+	return rows
 }

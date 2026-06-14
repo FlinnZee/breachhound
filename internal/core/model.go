@@ -36,6 +36,17 @@ type PersistenceItem struct {
 	User     string `json:"user,omitempty"`
 }
 
+// Event is a single Windows event-log record, with its named EventData fields
+// preserved so detectors (including Sigma) can match on them.
+type Event struct {
+	Channel  string            `json:"channel"`
+	Provider string            `json:"provider,omitempty"`
+	ID       int               `json:"id"`
+	Time     string            `json:"time,omitempty"`
+	Message  string            `json:"message,omitempty"`
+	Data     map[string]string `json:"data,omitempty"`
+}
+
 // LocalUser is a local account and the attributes detectors care about.
 type LocalUser struct {
 	Name      string   `json:"name"`
@@ -58,4 +69,5 @@ type HostModel struct {
 	Connections []Connection      `json:"connections,omitempty"`
 	Persistence []PersistenceItem `json:"persistence,omitempty"`
 	Users       []LocalUser       `json:"users,omitempty"`
+	Events      []Event           `json:"events,omitempty"`
 }

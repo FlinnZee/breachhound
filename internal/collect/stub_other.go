@@ -13,6 +13,7 @@ func init() {
 	core.RegisterCollector(stubCollector("processes"))
 	core.RegisterCollector(stubCollector("network"))
 	core.RegisterCollector(stubCollector("accounts"))
+	core.RegisterCollector(stubCollector("events"))
 }
 
 type stubCollector string

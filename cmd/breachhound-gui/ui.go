@@ -26,6 +26,7 @@ var navOrder = []struct {
 	{"network", "Network", theme.MailSendIcon()},
 	{"persistence", "Persistence", theme.StorageIcon()},
 	{"accounts", "Accounts", theme.AccountIcon()},
+	{"events", "Events", theme.ListIcon()},
 }
 
 // ui owns the window and the mutable widgets the scan flow updates.
@@ -140,6 +141,8 @@ func (u *ui) viewContent(id string) fyne.CanvasObject {
 		return u.persistenceView()
 	case "accounts":
 		return u.accountsView()
+	case "events":
+		return u.eventsView()
 	default:
 		return u.dashboardView()
 	}
