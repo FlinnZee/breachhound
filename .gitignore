@@ -5,5 +5,8 @@ report.json
 report.html
 /dist/
 
+# Generated Windows resource (embeds the exe icon); regenerated at release time
+cmd/breachhound-gui/rsrc_windows.syso
+
 # Local planning notes — not part of the shipped project
 vigil-PROJECT-BRIEF.md
