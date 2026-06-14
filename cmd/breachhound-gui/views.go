@@ -111,6 +111,17 @@ func (u *ui) persistenceView() fyne.CanvasObject {
 	))
 }
 
+func (u *ui) accountsView() fyne.CanvasObject {
+	if u.last == nil {
+		return u.emptyState("No scan yet", "Run a scan to list local accounts.", true)
+	}
+	return container.NewPadded(newDataTable(
+		[]string{"User", "Admin", "Enabled", "Last logon", "SID"},
+		[]float32{180, 80, 90, 150, 320},
+		accountRows(u.last.Host),
+	))
+}
+
 // --- shared finding/result builders ---
 
 func verdictBanner(r core.Result) fyne.CanvasObject {
@@ -232,4 +243,19 @@ func persistenceRows(h *core.HostModel) [][]string {
 		rows = append(rows, []string{p.Type, p.Name, p.Command, p.Location})
 	}
 	return rows
+}
+
+func accountRows(h *core.HostModel) [][]string {
+	rows := make([][]string, 0, len(h.Users))
+	for _, u := range h.Users {
+		rows = append(rows, []string{u.Name, yesNo(u.Admin), yesNo(u.Enabled), u.LastLogon, u.SID})
+	}
+	return rows
+}
+
+func yesNo(b bool) string {
+	if b {
+		return "yes"
+	}
+	return "no"
 }

@@ -10,6 +10,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/FlinnZee/breachhound/internal/collect"
 	"github.com/FlinnZee/breachhound/internal/core"
 	"github.com/FlinnZee/breachhound/internal/report"
 )
@@ -24,6 +25,7 @@ var navOrder = []struct {
 	{"processes", "Processes", theme.ComputerIcon()},
 	{"network", "Network", theme.MailSendIcon()},
 	{"persistence", "Persistence", theme.StorageIcon()},
+	{"accounts", "Accounts", theme.AccountIcon()},
 }
 
 // ui owns the window and the mutable widgets the scan flow updates.
@@ -87,12 +89,20 @@ func (u *ui) buildSidebar() fyne.CanvasObject {
 	u.exportBtn.Disable()
 	quick := widget.NewCheck("Quick scan", func(b bool) { u.quick = b })
 
+	controls := []fyne.CanvasObject{host, meta}
+	if !u.elevated {
+		el := widget.NewButtonWithIcon("Run as Administrator", theme.WarningIcon(), u.elevate)
+		el.Importance = widget.WarningImportance
+		controls = append(controls, el)
+	}
+	controls = append(controls, widget.NewLabel(""), u.runBtn, u.exportBtn, quick)
+
 	credit := canvas.NewText(fmt.Sprintf("v%s  ·  by %s", core.Version, core.Author), hex(0x6e7681))
 	credit.TextSize = 10
 
 	bottom := container.NewVBox(
 		widget.NewSeparator(),
-		container.NewPadded(container.NewVBox(host, meta, widget.NewLabel(""), u.runBtn, u.exportBtn, quick)),
+		container.NewPadded(container.NewVBox(controls...)),
 		widget.NewSeparator(),
 		container.NewPadded(credit),
 	)
@@ -124,6 +134,8 @@ func (u *ui) viewContent(id string) fyne.CanvasObject {
 		return u.networkView()
 	case "persistence":
 		return u.persistenceView()
+	case "accounts":
+		return u.accountsView()
 	default:
 		return u.dashboardView()
 	}
@@ -170,6 +182,17 @@ func (u *ui) setProgress(frac float64, stage string) {
 	if u.stageLbl != nil {
 		u.stageLbl.SetText(stage)
 	}
+}
+
+func (u *ui) elevate() {
+	if err := collect.Relaunch(); err != nil {
+		dialog.ShowInformation("Could not elevate",
+			"BreachHound could not relaunch with Administrator rights. You can also right-click the app and choose \"Run as administrator\".",
+			u.win)
+		return
+	}
+	// The elevated instance is starting; close this unelevated one.
+	u.app.Quit()
 }
 
 func (u *ui) exportReport() {
