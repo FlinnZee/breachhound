@@ -13,8 +13,10 @@ import (
 func main() {
 	a := app.New()
 	a.Settings().SetTheme(newBreachTheme())
+	a.SetIcon(appIcon)
 
 	w := a.NewWindow(core.Name + " — Compromise Assessment")
+	w.SetIcon(appIcon)
 	w.Resize(fyne.NewSize(1180, 760))
 
 	name, osName, elevated := quickHostInfo()

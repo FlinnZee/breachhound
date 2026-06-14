@@ -11,8 +11,9 @@ import (
 
 // scanResult bundles everything the UI needs to render once a scan finishes.
 type scanResult struct {
-	Host   *core.HostModel
-	Result core.Result
+	Host     *core.HostModel
+	Result   core.Result
+	Duration time.Duration
 }
 
 // quickHostInfo returns lightweight host identity for the window header,
@@ -41,9 +42,11 @@ func runScan(quick bool, onStage func(phase, name string)) scanResult {
 	ctx.Host.CollectedAt = time.Now()
 	ctx.OnStage = onStage
 
+	start := time.Now()
 	ctx.Run()
 	return scanResult{
-		Host:   ctx.Host,
-		Result: core.Score(ctx.Findings(), ctx.Skipped()),
+		Host:     ctx.Host,
+		Result:   core.Score(ctx.Findings(), ctx.Skipped()),
+		Duration: time.Since(start),
 	}
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image/color"
+	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -63,21 +64,47 @@ func severityChip(s core.Severity) fyne.CanvasObject {
 	return container.NewGridWrap(fyne.NewSize(12, 12), c)
 }
 
-// newDataTable builds a searchable table over rows. headers/widths define the
-// columns; a search box filters rows by case-insensitive substring.
+// newDataTable builds a searchable, sortable table over rows. headers/widths
+// define the columns; a search box filters by case-insensitive substring and a
+// column + direction control sorts the rows.
 func newDataTable(headers []string, widths []float32, allRows [][]string) fyne.CanvasObject {
-	filtered := allRows
+	master := append([][]string(nil), allRows...)
+	view := append([][]string(nil), master...)
+	query := ""
+	sortCol := -1
+	asc := true
 
-	table := widget.NewTable(
-		func() (int, int) { return len(filtered), len(headers) },
+	var table *widget.Table
+	count := widget.NewLabel("")
+
+	apply := func() {
+		if sortCol >= 0 {
+			sort.SliceStable(master, func(i, j int) bool {
+				return cellLess(master[i][sortCol], master[j][sortCol], asc)
+			})
+		}
+		view = view[:0]
+		for _, r := range master {
+			if query == "" || rowMatches(r, query) {
+				view = append(view, r)
+			}
+		}
+		count.SetText(fmt.Sprintf("%d rows", len(view)))
+		if table != nil {
+			table.Refresh()
+		}
+	}
+
+	table = widget.NewTable(
+		func() (int, int) { return len(view), len(headers) },
 		func() fyne.CanvasObject {
 			l := widget.NewLabel("")
 			l.Truncation = fyne.TextTruncateEllipsis
 			return l
 		},
 		func(id widget.TableCellID, o fyne.CanvasObject) {
-			if id.Row < len(filtered) && id.Col < len(headers) {
-				o.(*widget.Label).SetText(filtered[id.Row][id.Col])
+			if id.Row < len(view) && id.Col < len(headers) {
+				o.(*widget.Label).SetText(view[id.Row][id.Col])
 			}
 		},
 	)
@@ -100,27 +127,29 @@ func newDataTable(headers []string, widths []float32, allRows [][]string) fyne.C
 	search := widget.NewEntry()
 	search.SetPlaceHolder("Search…")
 	search.OnChanged = func(q string) {
-		q = strings.ToLower(strings.TrimSpace(q))
-		if q == "" {
-			filtered = allRows
-		} else {
-			filtered = nil
-			for _, r := range allRows {
-				if rowMatches(r, q) {
-					filtered = append(filtered, r)
-				}
-			}
-		}
-		table.Refresh()
+		query = strings.ToLower(strings.TrimSpace(q))
+		apply()
 	}
 
-	count := widget.NewLabel("")
-	updateCount := func() { count.SetText(fmt.Sprintf("%d rows", len(filtered))) }
-	updateCount()
-	prev := search.OnChanged
-	search.OnChanged = func(q string) { prev(q); updateCount() }
+	dirBtn := widget.NewButton("Asc", nil)
+	dirBtn.OnTapped = func() {
+		asc = !asc
+		if asc {
+			dirBtn.SetText("Asc")
+		} else {
+			dirBtn.SetText("Desc")
+		}
+		apply()
+	}
+	sortSel := widget.NewSelect(headers, func(s string) {
+		sortCol = indexOf(headers, s)
+		apply()
+	})
+	sortSel.PlaceHolder = "Sort by…"
 
-	top := container.NewBorder(nil, nil, nil, count, search)
+	apply()
+	controls := container.NewHBox(sortSel, dirBtn, count)
+	top := container.NewBorder(nil, nil, nil, controls, search)
 	return container.NewBorder(top, nil, nil, nil, table)
 }
 
@@ -131,6 +160,37 @@ func rowMatches(row []string, q string) bool {
 		}
 	}
 	return false
+}
+
+// cellLess orders two cells, comparing numerically when both parse as integers
+// and lexicographically (case-insensitive) otherwise.
+func cellLess(a, b string, asc bool) bool {
+	less := false
+	ai, aerr := strconv.Atoi(strings.TrimSpace(a))
+	bi, berr := strconv.Atoi(strings.TrimSpace(b))
+	if aerr == nil && berr == nil {
+		less = ai < bi
+	} else {
+		less = strings.ToLower(a) < strings.ToLower(b)
+	}
+	if !asc {
+		return !less
+	}
+	return less
+}
+
+func indexOf(ss []string, s string) int {
+	for i, v := range ss {
+		if v == s {
+			return i
+		}
+	}
+	return -1
+}
+
+// openFolder opens the given directory in the system file browser.
+func openFolder(path string) {
+	_ = exec.Command("explorer", path).Start()
 }
 
 // --- small shared helpers ---

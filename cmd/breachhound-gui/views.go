@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"strconv"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -59,6 +60,7 @@ func (u *ui) dashboardView() fyne.CanvasObject {
 	content := container.NewVBox(
 		verdictBanner(r),
 		summaryLine(r),
+		scanMeta(res),
 		widget.NewSeparator(),
 		row,
 	)
@@ -68,14 +70,51 @@ func (u *ui) dashboardView() fyne.CanvasObject {
 	return container.NewScroll(content)
 }
 
+func scanMeta(res *scanResult) fyne.CanvasObject {
+	when := res.Host.CollectedAt.Format("2006-01-02 15:04:05")
+	txt := fmt.Sprintf("Scanned %s · %s · completed in %s",
+		res.Host.Hostname, when, res.Duration.Round(time.Millisecond))
+	return container.NewPadded(widget.NewLabelWithStyle(txt, fyne.TextAlignLeading, fyne.TextStyle{Italic: true}))
+}
+
 func (u *ui) findingsView() fyne.CanvasObject {
 	if u.last == nil {
 		return u.emptyState("No scan yet", "Run a scan to see findings.", true)
 	}
-	if len(u.last.Result.Findings) == 0 {
+	all := u.last.Result.Findings
+	if len(all) == 0 {
 		return container.NewCenter(centeredText("No findings recorded.", 16, false, 0x8b949e))
 	}
-	return container.NewPadded(findingsSplit(u.last.Result))
+
+	body := container.NewStack()
+	render := func(sev string) {
+		fs := filterBySeverity(all, sev)
+		if len(fs) == 0 {
+			body.Objects = []fyne.CanvasObject{container.NewCenter(centeredText("No findings at this level.", 14, false, 0x8b949e))}
+		} else {
+			body.Objects = []fyne.CanvasObject{findingsSplit(fs)}
+		}
+		body.Refresh()
+	}
+
+	sel := widget.NewSelect([]string{"All", "Critical", "High", "Medium", "Low", "Info"}, render)
+	sel.SetSelected("All")
+	top := container.NewBorder(nil, nil, widget.NewLabelWithStyle("Severity", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), nil, sel)
+
+	return container.NewBorder(container.NewPadded(top), nil, nil, nil, container.NewPadded(body))
+}
+
+func filterBySeverity(fs []core.Finding, sev string) []core.Finding {
+	if sev == "" || sev == "All" {
+		return fs
+	}
+	var out []core.Finding
+	for _, f := range fs {
+		if strings.EqualFold(f.Severity.String(), sev) {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func (u *ui) processesView() fyne.CanvasObject {
@@ -152,13 +191,13 @@ func skippedNote(r core.Result) fyne.CanvasObject {
 	return container.NewPadded(widget.NewLabelWithStyle(txt, fyne.TextAlignLeading, fyne.TextStyle{Italic: true}))
 }
 
-func findingsSplit(r core.Result) fyne.CanvasObject {
+func findingsSplit(findings []core.Finding) fyne.CanvasObject {
 	detail := widget.NewRichTextFromMarkdown(
 		"### Select a finding\n\nPick an item on the left to see its evidence and ATT&CK mapping.")
 	detail.Wrapping = fyne.TextWrapWord
 	show := func(f core.Finding) { detail.ParseMarkdown(findingMarkdown(f)) }
 
-	groups := report.GroupByTactic(r.Findings)
+	groups := report.GroupByTactic(findings)
 	acc := widget.NewAccordion()
 	acc.MultiOpen = true
 	for _, t := range sortedKeys(groups) {

@@ -95,7 +95,9 @@ func (u *ui) buildSidebar() fyne.CanvasObject {
 		el.Importance = widget.WarningImportance
 		controls = append(controls, el)
 	}
-	controls = append(controls, widget.NewLabel(""), u.runBtn, u.exportBtn, quick)
+	about := widget.NewButtonWithIcon("About", theme.InfoIcon(), u.showAbout)
+	about.Importance = widget.LowImportance
+	controls = append(controls, widget.NewLabel(""), u.runBtn, u.exportBtn, quick, about)
 
 	credit := canvas.NewText(fmt.Sprintf("v%s  ·  by %s", core.Version, core.Author), hex(0x6e7681))
 	credit.TextSize = 10
@@ -216,7 +218,15 @@ func (u *ui) exportReport() {
 			return
 		}
 		dialog.ShowInformation("Report saved", join(wrote), u.win)
+		openFolder(path)
 	}, u.win)
+}
+
+func (u *ui) showAbout() {
+	msg := fmt.Sprintf(
+		"%s  v%s\nby %s\n\nA read-only Windows compromise-assessment tool.\nIt inspects and reports — it never modifies the system.\nFor defensive, authorized use only.\n\ngithub.com/FlinnZee/breachhound",
+		core.Name, core.Version, core.Author)
+	dialog.ShowInformation("About "+core.Name, msg, u.win)
 }
 
 func join(s []string) string {
