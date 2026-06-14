@@ -20,6 +20,27 @@ func (i ioc) Detect(ctx *core.Context) ([]core.Finding, error) {
 
 	badIPs := rules.BadIPSet()
 	badDomains := rules.BadDomainSet()
+	badHashes := rules.BadHashSet()
+
+	// Process images whose SHA-256 matches a known-bad hash.
+	for _, p := range ctx.Host.Processes {
+		if p.SHA256 == "" {
+			continue
+		}
+		if _, bad := badHashes[strings.ToLower(p.SHA256)]; bad {
+			out = append(out, core.Finding{
+				ID:          fmt.Sprintf("ioc-hash-%d", p.PID),
+				Title:       "Process image matches a known-bad hash",
+				Description: fmt.Sprintf("The image for %q (PID %d) matches a known-bad SHA-256 indicator.", p.Name, p.PID),
+				Severity:    core.SevCritical,
+				Confidence:  core.ConfHigh,
+				Technique:   "T1204",
+				Tactic:      "Execution",
+				Source:      i.Name(),
+				Evidence:    []string{p.Path, p.SHA256},
+			})
+		}
+	}
 
 	// Network connections to known-bad remote IPs.
 	for _, c := range ctx.Host.Connections {

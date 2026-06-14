@@ -12,6 +12,7 @@ type Process struct {
 	User      string `json:"user,omitempty"`
 	Signed    bool   `json:"signed"`
 	Signature string `json:"signature,omitempty"` // signer / verification note
+	SHA256    string `json:"sha256,omitempty"`    // hash of the on-disk image
 }
 
 // Connection is an active network connection or listener and its owning process.

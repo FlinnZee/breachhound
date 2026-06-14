@@ -46,6 +46,12 @@ func (p processes) Collect(ctx *core.Context) error {
 	}
 	sigs := authenticodeBatch(paths)
 
+	// Hashing reads every image off disk, so skip it in quick mode.
+	var hashes map[string]string
+	if !ctx.Config.Quick {
+		hashes = hashFiles(paths)
+	}
+
 	for _, r := range raw {
 		key := strings.ToLower(strings.TrimSpace(r.ExecutablePath))
 		sig := sigs[key]
@@ -57,6 +63,7 @@ func (p processes) Collect(ctx *core.Context) error {
 			CmdLine:   r.CommandLine,
 			Signed:    sig.valid,
 			Signature: sig.signer,
+			SHA256:    hashes[key],
 		})
 	}
 	return nil

@@ -22,7 +22,10 @@ var userWritablePathHints = []string{
 }
 
 // lolbins are living-off-the-land binaries frequently abused for download/exec.
-var lolbins = []string{"rundll32", "mshta", "certutil", "regsvr32", "bitsadmin", "wmic"}
+var lolbins = []string{
+	"rundll32", "mshta", "certutil", "regsvr32", "bitsadmin", "wmic",
+	"msbuild", "installutil", "regasm", "regsvcs", "cmstp", "wscript", "cscript",
+}
 
 // downloadFlags are argument fragments that indicate remote content fetch/exec.
 var downloadFlags = []string{"http://", "https://", "/urlcache", "-urlcache", "downloadstring", "iwr ", "invoke-webrequest"}
@@ -57,6 +60,21 @@ func (h heuristics) Detect(ctx *core.Context) ([]core.Finding, error) {
 				Tactic:     "Defense Evasion",
 				Source:     h.Name(),
 				Evidence:   []string{p.Path, p.CmdLine},
+			})
+		}
+
+		// Any process executing from the Recycle Bin is highly suspicious.
+		if strings.Contains(lpath, `\$recycle.bin\`) {
+			out = append(out, core.Finding{
+				ID:          fmt.Sprintf("heur-recyclebin-%d", p.PID),
+				Title:       "Process running from the Recycle Bin",
+				Description: fmt.Sprintf("Process %q (PID %d) is executing from the Recycle Bin, a classic hiding spot for malware.", p.Name, p.PID),
+				Severity:    core.SevHigh,
+				Confidence:  core.ConfHigh,
+				Technique:   "T1036",
+				Tactic:      "Defense Evasion",
+				Source:      h.Name(),
+				Evidence:    []string{p.Path, p.CmdLine},
 			})
 		}
 

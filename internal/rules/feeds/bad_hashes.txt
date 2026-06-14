@@ -1,0 +1,7 @@
+# Known-bad file hashes (SHA-256, lower-case hex), one per line.
+# Lines starting with '#' and blank lines are ignored.
+#
+# Seed this with hashes from threat-intel feeds or known malware samples.
+
+# EICAR anti-malware test file (harmless industry-standard test indicator).
+275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f

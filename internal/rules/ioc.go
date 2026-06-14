@@ -15,12 +15,19 @@ var badIPs string
 //go:embed feeds/bad_domains.txt
 var badDomains string
 
+//go:embed feeds/bad_hashes.txt
+var badHashes string
+
 // BadIPSet returns the embedded known-bad IP indicators as a set.
 func BadIPSet() map[string]struct{} { return toSet(badIPs, false) }
 
 // BadDomainSet returns the embedded known-bad domain indicators as a set
 // (lower-cased for case-insensitive matching).
 func BadDomainSet() map[string]struct{} { return toSet(badDomains, true) }
+
+// BadHashSet returns the embedded known-bad file-hash indicators as a set
+// (lower-cased SHA-256 hex digests).
+func BadHashSet() map[string]struct{} { return toSet(badHashes, true) }
 
 func toSet(blob string, lower bool) map[string]struct{} {
 	set := map[string]struct{}{}
