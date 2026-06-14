@@ -97,7 +97,9 @@ func (u *ui) buildSidebar() fyne.CanvasObject {
 	}
 	about := widget.NewButtonWithIcon("About", theme.InfoIcon(), u.showAbout)
 	about.Importance = widget.LowImportance
-	controls = append(controls, widget.NewLabel(""), u.runBtn, u.exportBtn, quick, about)
+	demo := widget.NewButton("Load demo data", u.loadDemo)
+	demo.Importance = widget.LowImportance
+	controls = append(controls, widget.NewLabel(""), u.runBtn, u.exportBtn, quick, about, demo)
 
 	credit := canvas.NewText(fmt.Sprintf("v%s  ·  by %s", core.Version, core.Author), hex(0x6e7681))
 	credit.TextSize = 10
@@ -220,6 +222,13 @@ func (u *ui) exportReport() {
 		dialog.ShowInformation("Report saved", join(wrote), u.win)
 		openFolder(path)
 	}, u.win)
+}
+
+func (u *ui) loadDemo() {
+	res := demoResult()
+	u.last = &res
+	u.exportBtn.Enable()
+	u.selectView("dashboard")
 }
 
 func (u *ui) showAbout() {

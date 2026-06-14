@@ -57,17 +57,28 @@ func (u *ui) dashboardView() fyne.CanvasObject {
 	row := container.NewBorder(nil, nil, container.NewPadded(riskGauge(r.RiskScore, r.Verdict)), nil,
 		container.NewPadded(cards))
 
-	content := container.NewVBox(
-		verdictBanner(r),
-		summaryLine(r),
-		scanMeta(res),
-		widget.NewSeparator(),
-		row,
-	)
+	content := container.NewVBox()
+	if res.Host.Hostname == "DEMO-HOST" {
+		content.Add(demoNotice())
+	}
+	content.Add(verdictBanner(r))
+	content.Add(summaryLine(r))
+	content.Add(scanMeta(res))
+	content.Add(widget.NewSeparator())
+	content.Add(row)
 	if note := skippedNote(r); note != nil {
 		content.Add(note)
 	}
 	return container.NewScroll(content)
+}
+
+func demoNotice() fyne.CanvasObject {
+	bg := canvas.NewRectangle(hex(0x3d340f))
+	bg.CornerRadius = 8
+	txt := canvas.NewText("DEMO DATA — sample findings, not a real scan of this machine", hex(0xf2cc60))
+	txt.TextStyle.Bold = true
+	txt.TextSize = 13
+	return container.NewPadded(container.NewStack(bg, container.NewPadded(txt)))
 }
 
 func scanMeta(res *scanResult) fyne.CanvasObject {
