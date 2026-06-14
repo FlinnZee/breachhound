@@ -1,0 +1,22 @@
+title: Suspicious PowerShell Download Cradle
+id: bh-0002-ps-download
+status: stable
+description: PowerShell script block fetching and executing remote content.
+level: high
+tags:
+  - attack.execution
+  - attack.t1059.001
+logsource:
+  product: windows
+  service: powershell
+detection:
+  selection:
+    EventID: 4104
+    ScriptBlockText|contains:
+      - DownloadString
+      - DownloadFile
+      - Invoke-Expression
+      - 'IEX('
+      - 'IEX ('
+      - FromBase64String
+  condition: selection

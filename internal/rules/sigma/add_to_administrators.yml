@@ -1,0 +1,16 @@
+title: Member Added to Administrators Group
+id: bh-0004-add-admin
+status: stable
+description: A member was added to the local Administrators group.
+level: medium
+tags:
+  - attack.persistence
+  - attack.t1098
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4732
+    TargetUserName: Administrators
+  condition: selection
